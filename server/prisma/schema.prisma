@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  password      String
+  isAdmin       Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  tags          Tag[]
+  passwordEntries PasswordEntry[]
+  
+  @@map("users")
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordEntries PasswordEntryTag[]
+  
+  @@unique([name, userId])
+  @@map("tags")
+}
+
+model PasswordEntry {
+  id        String   @id @default(cuid())
+  site      String
+  username  String
+  password  String
+  notes     String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags      PasswordEntryTag[]
+  
+  @@map("password_entries")
+}
+
+model PasswordEntryTag {
+  id              String        @id @default(cuid())
+  passwordEntryId String
+  tagId           String
+  
+  passwordEntry   PasswordEntry @relation(fields: [passwordEntryId], references: [id], onDelete: Cascade)
+  tag             Tag           @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@unique([passwordEntryId, tagId])
+  @@map("password_entry_tags")
+}

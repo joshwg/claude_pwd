@@ -1,0 +1,106 @@
+export interface User {
+  id: string;
+  name: string;
+  isAdmin: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    passwordEntries: number;
+  };
+}
+
+export interface PasswordEntry {
+  id: string;
+  site: string;
+  username: string;
+  password: string;
+  notes?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: Tag[];
+}
+
+export interface LoginRequest {
+  name: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  name: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  token: string;
+}
+
+export interface CreateUserRequest {
+  name: string;
+  password: string;
+  isAdmin?: boolean;
+}
+
+export interface UpdateUserRequest {
+  name?: string;
+  isAdmin?: boolean;
+}
+
+export interface UpdatePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface AdminUpdatePasswordRequest {
+  newPassword: string;
+}
+
+export interface CreateTagRequest {
+  name: string;
+  description?: string;
+  color: string;
+}
+
+export interface UpdateTagRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
+export interface CreatePasswordEntryRequest {
+  site: string;
+  username: string;
+  password: string;
+  notes?: string;
+  tagIds?: string[];
+}
+
+export interface UpdatePasswordEntryRequest {
+  site?: string;
+  username?: string;
+  password?: string;
+  notes?: string;
+  tagIds?: string[];
+}
+
+export interface SearchPasswordsParams {
+  query?: string;
+  tagIds?: string[];
+}
+
+export interface ApiError {
+  error: string;
+  message?: string;
+  details?: any;
+}
