@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, AuthResponse, LoginRequest, RegisterRequest } from '../types';
+import { User, AuthResponse, LoginRequest } from '../types';
 import * as authAPI from '../services/authService';
 import toast from 'react-hot-toast';
 
@@ -8,7 +8,6 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  register: (userData: RegisterRequest) => Promise<void>;
   logout: () => void;
 }
 
@@ -57,19 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (userData: RegisterRequest) => {
-    try {
-      const response: AuthResponse = await authAPI.register(userData);
-      setUser(response.user);
-      setToken(response.token);
-      localStorage.setItem('token', response.token);
-      toast.success(`Welcome, ${response.user.name}!`);
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Registration failed');
-      throw error;
-    }
-  };
-
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -82,7 +68,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     token,
     loading,
     login,
-    register,
     logout,
   };
 

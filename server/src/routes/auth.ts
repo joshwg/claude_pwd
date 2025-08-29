@@ -2,66 +2,9 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
-import { loginSchema, registerSchema } from '../utils/validation';
+import { loginSchema } from '../utils/validation';
 
 const router = express.Router();
-
-// Register new user
-router.post('/register', async (req: any, res: any) => {
-  try {
-    const validation = registerSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: validation.error.issues 
-      });
-    }
-
-    const { name, password } = validation.data;
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { name: name.toLowerCase() }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name: name.toLowerCase(),
-        password: hashedPassword,
-        isAdmin: false
-      },
-      select: {
-        id: true,
-        name: true,
-        isAdmin: true,
-        createdAt: true
-      }
-    });
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      user,
-      token
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // Login
 router.post('/login', async (req: any, res: any) => {
@@ -114,7 +57,7 @@ router.post('/login', async (req: any, res: any) => {
 });
 
 // Verify token
-router.get('/verify', async (req: any, res: any): Promise<void> => {
+router.get('/verify', async (req: any, res: any) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     

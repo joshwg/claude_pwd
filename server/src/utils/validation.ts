@@ -45,7 +45,7 @@ export const updateTagSchema = z.object({
 export const createPasswordEntrySchema = z.object({
   site: z.string().min(1, 'Site is required'),
   username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().optional(),
   notes: z.string().optional(),
   tagIds: z.array(z.string()).optional().default([]),
 });
@@ -53,7 +53,7 @@ export const createPasswordEntrySchema = z.object({
 export const updatePasswordEntrySchema = z.object({
   site: z.string().min(1, 'Site is required').optional(),
   username: z.string().min(1, 'Username is required').optional(),
-  password: z.string().min(1, 'Password is required').optional(),
+  password: z.string().optional(),
   notes: z.string().optional(),
   tagIds: z.array(z.string()).optional(),
 });

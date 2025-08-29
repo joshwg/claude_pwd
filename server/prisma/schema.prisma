@@ -44,8 +44,9 @@ model PasswordEntry {
   id        String   @id @default(cuid())
   site      String
   username  String
-  password  String
+  password  String?
   notes     String?
+  salt      String
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -53,6 +54,7 @@ model PasswordEntry {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags      PasswordEntryTag[]
   
+  @@unique([site, username, userId])
   @@map("password_entries")
 }
 

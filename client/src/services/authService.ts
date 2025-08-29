@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { 
   LoginRequest, 
-  RegisterRequest, 
   AuthResponse, 
   User 
 } from '../types';
@@ -24,11 +23,6 @@ api.interceptors.request.use((config) => {
 
 export const login = async (credentials: LoginRequest): Promise<AuthResponse> => {
   const response = await api.post('/auth/login', credentials);
-  return response.data;
-};
-
-export const register = async (userData: RegisterRequest): Promise<AuthResponse> => {
-  const response = await api.post('/auth/register', userData);
   return response.data;
 };
 

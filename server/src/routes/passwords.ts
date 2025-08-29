@@ -6,6 +6,7 @@ import {
   updatePasswordEntrySchema, 
   searchPasswordsSchema 
 } from '../utils/validation';
+import { generateSalt, encrypt, decrypt } from '../utils/crypto';
 
 const router = express.Router();
 
@@ -44,13 +45,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: any) => {
           }
         }
       },
-      orderBy: { site: 'asc' }
+      orderBy: [
+        { site: 'asc' },
+        { username: 'asc' }
+      ]
     });
 
-    // Transform to include tag information directly
+    // Transform to include decrypted data and tag information directly
     const formattedEntries = passwordEntries.map(entry => ({
       ...entry,
-      tags: entry.tags.map(t => t.tag)
+      password: entry.password ? decrypt(entry.password, entry.salt) : null,
+      notes: entry.notes ? decrypt(entry.notes, entry.salt) : null,
+      tags: entry.tags.map(t => t.tag),
+      salt: undefined // Remove salt from response for security
     }));
 
     res.json(formattedEntries);
@@ -108,6 +115,23 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
     const { site, username, password, notes, tagIds } = validation.data;
     const userId = req.user!.id;
 
+    // Check for uniqueness: site + username combination for this user
+    const existingEntry = await prisma.passwordEntry.findFirst({
+      where: { site, username, userId }
+    });
+
+    if (existingEntry) {
+      return res.status(400).json({ 
+        error: 'Password entry already exists for this site and username combination' 
+      });
+    }
+
+    // Check password length and add warning
+    const warnings = [];
+    if (password && password.length < 12) {
+      warnings.push('Password is less than 12 characters - consider using a stronger password');
+    }
+
     // Verify all tag IDs belong to the user
     if (tagIds && tagIds.length > 0) {
       const userTags = await prisma.tag.findMany({
@@ -119,13 +143,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
       }
     }
 
+    // Generate salt for encryption
+    const salt = generateSalt();
+
+    // Encrypt password and notes
+    const encryptedPassword = password ? encrypt(password, salt) : null;
+    const encryptedNotes = notes ? encrypt(notes, salt) : null;
+
     // Create password entry
     const passwordEntry = await prisma.passwordEntry.create({
       data: {
         site,
         username,
-        password,
-        notes,
+        password: encryptedPassword,
+        notes: encryptedNotes,
+        salt,
         userId,
         tags: {
           create: tagIds?.map(tagId => ({ tagId })) || []
@@ -140,13 +172,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
       }
     });
 
-    // Transform to include tag information directly
-    const formattedEntry = {
+    // Decrypt for response
+    const decryptedEntry = {
       ...passwordEntry,
+      password: passwordEntry.password ? decrypt(passwordEntry.password, passwordEntry.salt) : null,
+      notes: passwordEntry.notes ? decrypt(passwordEntry.notes, passwordEntry.salt) : null,
       tags: passwordEntry.tags.map(t => t.tag)
     };
 
-    res.status(201).json(formattedEntry);
+    const response: any = { passwordEntry: decryptedEntry };
+    if (warnings.length > 0) {
+      response.warnings = warnings;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error('Error creating password entry:', error);
     res.status(500).json({ error: 'Internal server error' });
