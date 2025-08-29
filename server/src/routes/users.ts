@@ -258,4 +258,32 @@ router.put('/:id/password', authenticate, requireAdmin, async (req: AuthRequest,
   }
 });
 
+// Validate username availability (admin only)
+router.post('/validate-username', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { name, excludeId } = req.body;
+    
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const whereClause: any = { name: name.toLowerCase() };
+    if (excludeId) {
+      whereClause.NOT = { id: excludeId };
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: whereClause
+    });
+
+    res.json({ 
+      available: !existingUser,
+      message: existingUser ? 'Username already exists' : 'Username is available'
+    });
+  } catch (error) {
+    console.error('Error validating username:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { User as UserType } from '../types';
-import { getUsers, createUser, updateUser, deleteUser, updateUserPassword } from '../services/userService';
+import { getUsers, createUser, updateUser, deleteUser, updateUserPassword, validateUsername } from '../services/userService';
 import { Users, Plus, Edit, Trash2, Shield, User, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface UserFormData {
   name: string;
   password: string;
   isAdmin: boolean;
+}
+
+interface ValidationState {
+  username: {
+    isValidating: boolean;
+    isValid: boolean;
+    message: string;
+  };
 }
 
 const AdminPanel: React.FC = () => {
@@ -21,10 +30,58 @@ const AdminPanel: React.FC = () => {
     password: '',
     isAdmin: false
   });
+  const [validation, setValidation] = useState<ValidationState>({
+    username: {
+      isValidating: false,
+      isValid: true,
+      message: ''
+    }
+  });
+
+  const debouncedUsername = useDebounce(formData.name, 500);
 
   useEffect(() => {
     loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (debouncedUsername && debouncedUsername.trim() !== '') {
+      validateUsernameDebounced(debouncedUsername.trim());
+    } else {
+      setValidation(prev => ({
+        ...prev,
+        username: { isValidating: false, isValid: true, message: '' }
+      }));
+    }
+  }, [debouncedUsername, editingUser]);
+
+  const validateUsernameDebounced = async (username: string) => {
+    setValidation(prev => ({
+      ...prev,
+      username: { ...prev.username, isValidating: true }
+    }));
+
+    try {
+      const result = await validateUsername(username, editingUser?.id);
+      setValidation(prev => ({
+        ...prev,
+        username: {
+          isValidating: false,
+          isValid: result.available,
+          message: result.available ? 'Username is available' : result.message
+        }
+      }));
+    } catch (error) {
+      setValidation(prev => ({
+        ...prev,
+        username: {
+          isValidating: false,
+          isValid: false,
+          message: 'Failed to validate username'
+        }
+      }));
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -165,15 +222,35 @@ const AdminPanel: React.FC = () => {
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                   Name *
                 </label>
-                <input
-                  type="text"
-                  id="name"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="User's full name"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="name"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formData.name && !validation.username.isValid 
+                        ? 'border-red-300 bg-red-50' 
+                        : formData.name && validation.username.isValid && !validation.username.isValidating
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-gray-300'
+                    }`}
+                    placeholder="User's full name"
+                  />
+                  {validation.username.isValidating && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    </div>
+                  )}
+                </div>
+                {formData.name && validation.username.message && (
+                  <p className={`text-xs mt-1 ${
+                    validation.username.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {validation.username.message}
+                  </p>
+                )}
               </div>
 
               {!editingUser && (
@@ -217,7 +294,8 @@ const AdminPanel: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                  disabled={!validation.username.isValid || validation.username.isValidating}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingUser ? 'Update User' : 'Create User'}
                 </button>

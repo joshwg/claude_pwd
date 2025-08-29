@@ -56,7 +56,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: any) => {
       ...entry,
       password: entry.password ? decrypt(entry.password, entry.salt) : null,
       notes: entry.notes ? decrypt(entry.notes, entry.salt) : null,
-      tags: entry.tags.map(t => t.tag),
+      tags: entry.tags.map((t: any) => t.tag),
       salt: undefined // Remove salt from response for security
     }));
 
@@ -88,10 +88,13 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: any) => {
       return res.status(404).json({ error: 'Password entry not found' });
     }
 
-    // Transform to include tag information directly
+    // Transform to include decrypted data and tag information directly
     const formattedEntry = {
       ...passwordEntry,
-      tags: passwordEntry.tags.map(t => t.tag)
+      password: passwordEntry.password ? decrypt(passwordEntry.password, passwordEntry.salt) : null,
+      notes: passwordEntry.notes ? decrypt(passwordEntry.notes, passwordEntry.salt) : null,
+      tags: passwordEntry.tags.map((t: any) => t.tag),
+      salt: undefined // Remove salt from response for security
     };
 
     res.json(formattedEntry);
@@ -177,7 +180,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
       ...passwordEntry,
       password: passwordEntry.password ? decrypt(passwordEntry.password, passwordEntry.salt) : null,
       notes: passwordEntry.notes ? decrypt(passwordEntry.notes, passwordEntry.salt) : null,
-      tags: passwordEntry.tags.map(t => t.tag)
+      tags: passwordEntry.tags.map((t: any) => t.tag),
+      salt: undefined // Remove salt from response for security
     };
 
     const response: any = { passwordEntry: decryptedEntry };
@@ -217,6 +221,33 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
       return res.status(404).json({ error: 'Password entry not found' });
     }
 
+    // Check for uniqueness if site or username is being changed
+    const newSite = site || existingEntry.site;
+    const newUsername = username || existingEntry.username;
+    
+    if (site !== undefined || username !== undefined) {
+      const duplicateEntry = await prisma.passwordEntry.findFirst({
+        where: { 
+          site: newSite, 
+          username: newUsername, 
+          userId,
+          NOT: { id }
+        }
+      });
+
+      if (duplicateEntry) {
+        return res.status(400).json({ 
+          error: 'Password entry already exists for this site and username combination' 
+        });
+      }
+    }
+
+    // Check password length and add warning
+    const warnings = [];
+    if (password !== undefined && password && password.length < 12) {
+      warnings.push('Password is less than 12 characters - consider using a stronger password');
+    }
+
     // Verify all tag IDs belong to the user if provided
     if (tagIds && tagIds.length > 0) {
       const userTags = await prisma.tag.findMany({
@@ -228,14 +259,27 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
       }
     }
 
+    // Prepare update data with encryption
+    const updateData: any = {};
+    
+    if (site !== undefined) updateData.site = site;
+    if (username !== undefined) updateData.username = username;
+    
+    // Handle password encryption
+    if (password !== undefined) {
+      updateData.password = password ? encrypt(password, existingEntry.salt) : null;
+    }
+    
+    // Handle notes encryption  
+    if (notes !== undefined) {
+      updateData.notes = notes ? encrypt(notes, existingEntry.salt) : null;
+    }
+
     // Update password entry
     const updatedEntry = await prisma.passwordEntry.update({
       where: { id },
       data: {
-        ...(site && { site }),
-        ...(username && { username }),
-        ...(password && { password }),
-        ...(notes !== undefined && { notes }),
+        ...updateData,
         ...(tagIds !== undefined && {
           tags: {
             deleteMany: {},
@@ -252,13 +296,21 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
       }
     });
 
-    // Transform to include tag information directly
-    const formattedEntry = {
+    // Decrypt for response
+    const decryptedEntry = {
       ...updatedEntry,
-      tags: updatedEntry.tags.map(t => t.tag)
+      password: updatedEntry.password ? decrypt(updatedEntry.password, updatedEntry.salt) : null,
+      notes: updatedEntry.notes ? decrypt(updatedEntry.notes, updatedEntry.salt) : null,
+      tags: updatedEntry.tags.map((t: any) => t.tag),
+      salt: undefined // Remove salt from response for security
     };
 
-    res.json(formattedEntry);
+    const response: any = { passwordEntry: decryptedEntry };
+    if (warnings.length > 0) {
+      response.warnings = warnings;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Error updating password entry:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -288,6 +340,35 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: any) => {
     res.json({ message: 'Password entry deleted successfully' });
   } catch (error) {
     console.error('Error deleting password entry:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Validate site+username combination
+router.post('/validate-entry', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    const { site, username, excludeId } = req.body;
+    const userId = req.user!.id;
+    
+    if (!site || !username) {
+      return res.status(400).json({ error: 'Site and username are required' });
+    }
+
+    const whereClause: any = { site, username, userId };
+    if (excludeId) {
+      whereClause.NOT = { id: excludeId };
+    }
+
+    const existingEntry = await prisma.passwordEntry.findFirst({
+      where: whereClause
+    });
+
+    res.json({ 
+      available: !existingEntry,
+      message: existingEntry ? 'Password entry already exists for this site and username combination' : 'Site and username combination is available'
+    });
+  } catch (error) {
+    console.error('Error validating password entry:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

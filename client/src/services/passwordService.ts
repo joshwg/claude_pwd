@@ -45,3 +45,8 @@ export const updatePasswordEntry = async (id: string, data: UpdatePasswordEntryR
 export const deletePasswordEntry = async (id: string): Promise<void> => {
   await api.delete(`/passwords/${id}`);
 };
+
+export const validatePasswordEntry = async (site: string, username: string, excludeId?: string): Promise<{ available: boolean; message: string }> => {
+  const response = await api.post('/passwords/validate-entry', { site, username, excludeId });
+  return response.data;
+};

@@ -49,3 +49,8 @@ export const updateMyPassword = async (data: UpdatePasswordRequest): Promise<voi
 export const updateUserPassword = async (id: string, data: AdminUpdatePasswordRequest): Promise<void> => {
   await api.put(`/users/${id}/password`, data);
 };
+
+export const validateUsername = async (name: string, excludeId?: string): Promise<{ available: boolean; message: string }> => {
+  const response = await api.post('/users/validate-username', { name, excludeId });
+  return response.data;
+};
