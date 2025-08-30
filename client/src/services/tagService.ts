@@ -35,3 +35,8 @@ export const updateTag = async (id: string, tagData: UpdateTagRequest): Promise<
 export const deleteTag = async (id: string): Promise<void> => {
   await api.delete(`/tags/${id}`);
 };
+
+export const validateTagName = async (name: string, excludeId?: string): Promise<{ isValid: boolean; message: string }> => {
+  const response = await api.post('/tags/validate-name', { name, excludeId });
+  return response.data;
+};

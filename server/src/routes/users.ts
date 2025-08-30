@@ -47,7 +47,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res) => {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { name: name.toLowerCase() }
+      where: { name: name }
     });
 
     if (existingUser) {
@@ -60,7 +60,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res) => {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name: name.toLowerCase(),
+        name: name,
         password: hashedPassword,
         isAdmin: isAdmin || false
       },
@@ -109,9 +109,9 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => 
     }
 
     // Check if new name conflicts with existing user
-    if (name && name.toLowerCase() !== existingUser.name) {
+    if (name && name !== existingUser.name) {
       const conflictUser = await prisma.user.findUnique({
-        where: { name: name.toLowerCase() }
+        where: { name: name }
       });
       
       if (conflictUser) {
@@ -123,7 +123,7 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => 
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
-        ...(name && { name: name.toLowerCase() }),
+        ...(name && { name: name }),
         ...(isAdmin !== undefined && { isAdmin })
       },
       select: {
@@ -267,7 +267,7 @@ router.post('/validate-username', authenticate, requireAdmin, async (req: AuthRe
       return res.status(400).json({ error: 'Username is required' });
     }
 
-    const whereClause: any = { name: name.toLowerCase() };
+    const whereClause: any = { name: name };
     if (excludeId) {
       whereClause.NOT = { id: excludeId };
     }

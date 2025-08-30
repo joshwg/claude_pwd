@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { HexColorPicker } from 'react-colorful';
 import { Tag } from '../types';
-import { X } from 'lucide-react';
+import { X, Palette } from 'lucide-react';
+import { validateTagName } from '../services/tagService';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface TagFormProps {
   tag?: Tag;
@@ -36,6 +39,45 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
     color: TAG_COLORS[0]
   });
 
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [nameValidation, setNameValidation] = useState<{ isValid: boolean; message: string; isValidating: boolean }>({
+    isValid: true,
+    message: '',
+    isValidating: false
+  });
+
+  const debouncedName = useDebounce(formData.name, 500);
+
+  // Validate name when debounced name changes
+  useEffect(() => {
+    const validateName = async () => {
+      if (!debouncedName.trim()) {
+        setNameValidation({ isValid: true, message: '', isValidating: false });
+        return;
+      }
+
+      setNameValidation(prev => ({ ...prev, isValidating: true }));
+      
+      try {
+        const result = await validateTagName(debouncedName, tag?.id);
+        setNameValidation({
+          isValid: result.isValid,
+          message: result.message,
+          isValidating: false
+        });
+      } catch (error) {
+        setNameValidation({
+          isValid: false,
+          message: 'Validation failed',
+          isValidating: false
+        });
+      }
+    };
+
+    if (debouncedName !== formData.name) return; // Only validate if debounced value matches current
+    validateName();
+  }, [debouncedName, tag?.id, formData.name]);
+
   useEffect(() => {
     if (tag) {
       setFormData({
@@ -48,6 +90,7 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!nameValidation.isValid) return;
     onSubmit(formData);
   };
 
@@ -71,15 +114,35 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Tag Name *
             </label>
-            <input
-              type="text"
-              id="name"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Work, Personal, Social"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                id="name"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  nameValidation.isValidating
+                    ? 'border-gray-300'
+                    : !nameValidation.isValid && formData.name.trim()
+                    ? 'border-red-300 bg-red-50'
+                    : nameValidation.isValid && formData.name.trim()
+                    ? 'border-green-300 bg-green-50'
+                    : 'border-gray-300'
+                }`}
+                placeholder="e.g., Work, Personal, Social"
+              />
+              {nameValidation.isValidating && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                </div>
+              )}
+            </div>
+            {nameValidation.message && formData.name.trim() && (
+              <p className={`mt-1 text-sm ${nameValidation.isValid ? 'text-green-600' : 'text-red-600'}`}>
+                {nameValidation.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -100,21 +163,51 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Color
             </label>
-            <div className="grid grid-cols-6 gap-2">
-              {TAG_COLORS.map(color => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, color }))}
-                  className={`w-8 h-8 rounded-full border-2 ${
-                    formData.color === color ? 'border-gray-800' : 'border-gray-300'
-                  }`}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
+            
+            {/* Preset Colors */}
+            <div className="mb-3">
+              <span className="text-sm text-gray-500 mb-2 block">Preset Colors:</span>
+              <div className="grid grid-cols-6 gap-2">
+                {TAG_COLORS.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, color }))}
+                    className={`w-8 h-8 rounded-full border-2 ${
+                      formData.color === color ? 'border-gray-800' : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="mt-2 flex items-center space-x-2">
+
+            {/* Color Picker Toggle */}
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Palette className="h-4 w-4" />
+                <span>{showColorPicker ? 'Hide' : 'Show'} Color Wheel</span>
+              </button>
+            </div>
+
+            {/* Color Picker */}
+            {showColorPicker && (
+              <div className="mb-3">
+                <HexColorPicker
+                  color={formData.color}
+                  onChange={(color) => setFormData(prev => ({ ...prev, color }))}
+                  style={{ width: '100%', height: '200px' }}
+                />
+              </div>
+            )}
+
+            {/* Selected Color Display */}
+            <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-500">Selected:</span>
               <div 
                 className="w-4 h-4 rounded-full border border-gray-300"
@@ -134,7 +227,8 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={!nameValidation.isValid || nameValidation.isValidating || !formData.name.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {tag ? 'Update' : 'Create'} Tag
             </button>

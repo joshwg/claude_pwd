@@ -21,7 +21,7 @@ router.post('/login', async (req: any, res: any) => {
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { name: name.toLowerCase() }
+      where: { name: name }
     });
 
     if (!user) {

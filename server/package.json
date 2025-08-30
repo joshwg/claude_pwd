@@ -19,6 +19,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "lru-cache": "^11.0.0",
+    "mysql2": "^3.14.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -28,11 +29,11 @@
     "@types/jest": "^29.5.8",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^22.0.0",
-    "vitest": "^2.0.0",
     "nodemon": "^3.1.0",
     "prisma": "^6.15.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   },
   "overrides": {
     "inflight": "npm:lru-cache@^11.0.0",

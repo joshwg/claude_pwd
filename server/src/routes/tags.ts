@@ -45,7 +45,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
     const existingTag = await prisma.tag.findUnique({
       where: {
         name_userId: {
-          name: name.toLowerCase(),
+          name: name,
           userId
         }
       }
@@ -57,7 +57,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
 
     const tag = await prisma.tag.create({
       data: {
-        name: name.toLowerCase(),
+        name: name,
         description,
         color,
         userId
@@ -102,11 +102,11 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
     }
 
     // Check if new name conflicts with existing tag
-    if (name && name.toLowerCase() !== existingTag.name) {
+    if (name && name !== existingTag.name) {
       const conflictTag = await prisma.tag.findUnique({
         where: {
           name_userId: {
-            name: name.toLowerCase(),
+            name: name,
             userId
           }
         }
@@ -120,7 +120,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
     const updatedTag = await prisma.tag.update({
       where: { id },
       data: {
-        ...(name && { name: name.toLowerCase() }),
+        ...(name && { name: name }),
         ...(description !== undefined && { description }),
         ...(color && { color })
       },
@@ -161,6 +161,36 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: any) => {
     res.json({ message: 'Tag deleted successfully' });
   } catch (error) {
     console.error('Error deleting tag:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Validate tag name
+router.post('/validate-name', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    const { name, excludeId } = req.body;
+    const userId = req.user!.id;
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Tag name is required' });
+    }
+
+    // Check if tag with same name already exists for user (case insensitive)
+    const existingTag = await prisma.tag.findFirst({
+      where: {
+        userId,
+        name: name,
+        // Exclude current tag when editing
+        ...(excludeId && { id: { not: excludeId } })
+      }
+    });
+
+    const isValid = !existingTag;
+    const message = isValid ? 'Tag name is available' : 'Tag name already exists';
+
+    res.json({ isValid, message });
+  } catch (error) {
+    console.error('Error validating tag name:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
