@@ -7,7 +7,9 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest"
+    "test": "vitest",
+    "test:validation": "vitest run tests/validation.test.ts",
+    "test:api": "vitest run tests/api.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",
@@ -29,8 +31,10 @@
     "@types/jest": "^29.5.8",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.0",
     "prisma": "^6.15.0",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
@@ -38,5 +42,8 @@
   "overrides": {
     "inflight": "npm:lru-cache@^11.0.0",
     "glob": "^11.0.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

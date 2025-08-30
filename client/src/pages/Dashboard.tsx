@@ -142,8 +142,25 @@ const Dashboard: React.FC = () => {
       }
       setShowPasswordForm(false);
       setEditingPassword(null);
-    } catch (error) {
-      toast.error(editingPassword ? 'Failed to update password' : 'Failed to create password');
+    } catch (error: any) {
+      console.error('Password operation error:', error);
+      
+      // Extract error message from response
+      let errorMessage = editingPassword ? 'Failed to update password' : 'Failed to create password';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        // Handle validation errors
+        const details = error.response.data.details;
+        if (Array.isArray(details) && details.length > 0) {
+          errorMessage = details.map(d => d.message).join(', ');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -160,8 +177,25 @@ const Dashboard: React.FC = () => {
       }
       setShowTagForm(false);
       setEditingTag(null);
-    } catch (error) {
-      toast.error(editingTag ? 'Failed to update tag' : 'Failed to create tag');
+    } catch (error: any) {
+      console.error('Tag operation error:', error);
+      
+      // Extract error message from response
+      let errorMessage = editingTag ? 'Failed to update tag' : 'Failed to create tag';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        // Handle validation errors
+        const details = error.response.data.details;
+        if (Array.isArray(details) && details.length > 0) {
+          errorMessage = details.map(d => d.message).join(', ');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -394,7 +428,7 @@ const Dashboard: React.FC = () => {
       {/* Tag Form Modal */}
       {showTagForm && (
         <TagForm
-          tag={editingTag}
+          tag={editingTag || undefined}
           onSubmit={handleTagSubmit}
           onClose={() => {
             setShowTagForm(false);

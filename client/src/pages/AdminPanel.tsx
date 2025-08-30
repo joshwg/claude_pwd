@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User as UserType } from '../types';
 import { getUsers, createUser, updateUser, deleteUser, updateUserPassword, validateUsername } from '../services/userService';
-import { Users, Plus, Edit, Trash2, Shield, User, Eye, EyeOff } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Shield, User, Eye } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useDebounce } from '../hooks/useDebounce';
 
@@ -24,7 +24,6 @@ const AdminPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
-  const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     password: '',
@@ -88,8 +87,9 @@ const AdminPanel: React.FC = () => {
       setLoading(true);
       const data = await getUsers();
       setUsers(data.sort((a, b) => a.name.localeCompare(b.name)));
-    } catch (error) {
-      toast.error('Failed to load users');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to load users';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -127,8 +127,9 @@ const AdminPanel: React.FC = () => {
       await deleteUser(id);
       setUsers(users.filter(u => u.id !== id));
       toast.success('User deleted successfully');
-    } catch (error) {
-      toast.error('Failed to delete user');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to delete user';
+      toast.error(errorMessage);
     }
   };
 
@@ -144,19 +145,10 @@ const AdminPanel: React.FC = () => {
     try {
       await updateUserPassword(id, { newPassword });
       toast.success('Password updated successfully');
-    } catch (error) {
-      toast.error('Failed to update password');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to update password';
+      toast.error(errorMessage);
     }
-  };
-
-  const togglePasswordVisibility = (userId: string) => {
-    const newVisible = new Set(showPasswords);
-    if (newVisible.has(userId)) {
-      newVisible.delete(userId);
-    } else {
-      newVisible.add(userId);
-    }
-    setShowPasswords(newVisible);
   };
 
   const resetForm = () => {
@@ -352,11 +344,7 @@ const AdminPanel: React.FC = () => {
                     className="p-2 text-gray-400 hover:text-yellow-600"
                     title="Reset password"
                   >
-                    {showPasswords.has(user.id) ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    <Eye className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(user.id, user.name)}
