@@ -44,6 +44,23 @@ export interface RegisterRequest {
 export interface AuthResponse {
   user: User;
   token: string;
+  // Optional fields for login failure tracking
+  previousFailedAttempts?: number;
+}
+
+// Login lockout error response
+export interface LoginLockoutError {
+  error: string;
+  lockedUntil: string;
+  remainingSeconds: number;
+  attempts: number;
+}
+
+// Login attempt error response
+export interface LoginAttemptError {
+  error: string;
+  attempts: number;
+  attemptsRemaining: number;
 }
 
 export interface CreateUserRequest {

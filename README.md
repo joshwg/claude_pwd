@@ -6,6 +6,7 @@ A secure web-based password manager with user authentication, admin functionalit
 
 - User authentication and authorization
 - Administrator user management
+- **30-minute idle timeout** for enhanced security
 - Tag-based password organization
 - Secure password storage
 - Search functionality

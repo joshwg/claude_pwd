@@ -1,16 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const AuthLayout: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { 
+    login, 
+    logoutReason, 
+    clearLogoutReason, 
+    loginError, 
+    loginLockout, 
+    clearLoginError 
+  } = useAuth();
 
   const [loginData, setLoginData] = useState({
     name: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
+
+  // Clear logout reason when component mounts
+  useEffect(() => {
+    if (logoutReason) {
+      // Don't clear immediately, let user see the message
+      const timer = setTimeout(() => {
+        clearLogoutReason();
+      }, 10000); // Clear after 10 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [logoutReason, clearLogoutReason]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +55,70 @@ const AuthLayout: React.FC = () => {
           <p className="text-gray-600">Sign in to access your secure vault</p>
         </div>
 
+        {/* Logout Reason Message */}
+        {logoutReason && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-800">{logoutReason}</p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  type="button"
+                  onClick={clearLogoutReason}
+                  className="text-red-400 hover:text-red-600"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Login Error/Lockout Message */}
+        {(loginError || loginLockout) && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm text-red-800">
+                  {loginError}
+                  {loginLockout && (
+                    <span className="block mt-1 font-semibold">
+                      Time remaining: {Math.floor(loginLockout.remainingSeconds / 60)}:
+                      {(loginLockout.remainingSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {!loginLockout && (
+                <div className="ml-auto pl-3">
+                  <button
+                    type="button"
+                    onClick={clearLoginError}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -50,10 +133,11 @@ const AuthLayout: React.FC = () => {
                 name="name"
                 type="text"
                 required
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="Enter your username"
                 value={loginData.name}
                 onChange={(e) => setLoginData({ ...loginData, name: e.target.value })}
+                disabled={!!loginLockout}
               />
             </div>
           </div>
@@ -71,10 +155,11 @@ const AuthLayout: React.FC = () => {
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 required
-                className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="Enter your password"
                 value={loginData.password}
                 onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                disabled={!!loginLockout}
               />
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                 <button
@@ -90,7 +175,7 @@ const AuthLayout: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !!loginLockout}
             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           >
             {isLoading ? (
@@ -98,6 +183,8 @@ const AuthLayout: React.FC = () => {
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Signing in...
               </div>
+            ) : loginLockout ? (
+              'Account Locked'
             ) : (
               'Sign In'
             )}

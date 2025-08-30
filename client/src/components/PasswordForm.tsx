@@ -3,6 +3,7 @@ import { Tag } from '../types';
 import { X } from 'lucide-react';
 import { validatePasswordEntry } from '../services/passwordService';
 import { useDebounce } from '../hooks/useDebounce';
+import { useIsMobile, useIsTouchDevice } from '../hooks/useDeviceDetection';
 import PasswordInput from './PasswordInput';
 
 interface PasswordFormProps {
@@ -19,6 +20,8 @@ interface ValidationState {
 }
 
 const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, onClose }) => {
+  const isMobile = useIsMobile();
+  const isTouchDevice = useIsTouchDevice();
   const [formData, setFormData] = useState({
     site: '',
     username: '',
@@ -26,6 +29,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
     notes: '',
     tagIds: [] as string[]
   });
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [validation, setValidation] = useState<ValidationState>({
     isValidating: false,
     isValid: true,
@@ -37,13 +41,18 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
 
   useEffect(() => {
     if (password) {
+      const passwordTags = password.tags || [];
       setFormData({
         site: password.site || '',
         username: password.username || '',
         password: password.password || '',
         notes: password.notes || '',
-        tagIds: password.tags?.map((tag: Tag) => tag.id) || []
+        tagIds: passwordTags.map((tag: Tag) => tag.id)
       });
+      setSelectedTags(passwordTags);
+    } else {
+      // Reset form when creating new password
+      setSelectedTags([]);
     }
   }, [password]);
 
@@ -79,13 +88,34 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
     onSubmit(formData);
   };
 
-  const handleTagToggle = (tagId: string) => {
+  const handleTagSelect = (tag: Tag) => {
+    if (!selectedTags.find(t => t.id === tag.id)) {
+      const newSelectedTags = [...selectedTags, tag];
+      setSelectedTags(newSelectedTags);
+      setFormData(prev => ({
+        ...prev,
+        tagIds: newSelectedTags.map(t => t.id)
+      }));
+    }
+  };
+
+  const handleTagRemove = (tagId: string) => {
+    const newSelectedTags = selectedTags.filter(t => t.id !== tagId);
+    setSelectedTags(newSelectedTags);
     setFormData(prev => ({
       ...prev,
-      tagIds: prev.tagIds.includes(tagId)
-        ? prev.tagIds.filter(id => id !== tagId)
-        : [...prev.tagIds, tagId]
+      tagIds: newSelectedTags.map(t => t.id)
     }));
+  };
+
+  const getAvailableTags = () => {
+    return tags
+      .filter(tag => !selectedTags.find(t => t.id === tag.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const getSortedSelectedTags = () => {
+    return selectedTags.sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const generatePassword = () => {
@@ -97,9 +127,101 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
     setFormData(prev => ({ ...prev, password }));
   };
 
+  // Drag and Drop Components for Tags
+  const DraggableTag: React.FC<{ tag: Tag; onSelect: (tag: Tag) => void }> = ({ tag, onSelect }) => {
+    return (
+      <div
+        draggable={!isMobile && !isTouchDevice}
+        onDragStart={(e) => {
+          if (!isMobile && !isTouchDevice) {
+            e.dataTransfer.setData('application/json', JSON.stringify(tag));
+          }
+        }}
+        onClick={() => onSelect(tag)}
+        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-colors hover:opacity-75"
+        style={{ 
+          backgroundColor: `${tag.color}20`,
+          color: tag.color,
+          border: `1px solid ${tag.color}40`
+        }}
+      >
+        {tag.name}
+      </div>
+    );
+  };
+
+  const SelectedTag: React.FC<{ tag: Tag; onRemove: (tagId: string) => void }> = ({ tag, onRemove }) => {
+    return (
+      <div
+        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+        style={{ 
+          backgroundColor: `${tag.color}20`,
+          color: tag.color,
+          border: `1px solid ${tag.color}40`
+        }}
+      >
+        {tag.name}
+        <button
+          onClick={() => onRemove(tag.id)}
+          className="ml-2 hover:bg-red-100 rounded-full p-1"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  };
+
+  const DropZone: React.FC<{ onDrop: (tag: Tag) => void; children: React.ReactNode; className?: string }> = ({ 
+    onDrop, 
+    children, 
+    className = "" 
+  }) => {
+    const [dragOver, setDragOver] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent) => {
+      if (!isMobile && !isTouchDevice) {
+        e.preventDefault();
+        setDragOver(true);
+      }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+      if (!isMobile && !isTouchDevice) {
+        e.preventDefault();
+        setDragOver(false);
+      }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+      if (!isMobile && !isTouchDevice) {
+        e.preventDefault();
+        setDragOver(false);
+        
+        try {
+          const tagData = e.dataTransfer.getData('application/json');
+          const tag = JSON.parse(tagData);
+          onDrop(tag);
+        } catch (error) {
+          console.error('Failed to parse dropped tag data:', error);
+        }
+      }
+    };
+
+    return (
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`${className} ${dragOver ? 'ring-2 ring-blue-500 ring-opacity-50 bg-blue-50' : ''}`}
+      >
+        {children}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">
             {password ? 'Edit Password' : 'Add New Password'}
@@ -221,28 +343,107 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
 
           {tags.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
                 Tags
               </label>
-              <div className="space-y-2">
-                {tags.map(tag => (
-                  <label key={tag.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.tagIds.includes(tag.id)}
-                      onChange={() => handleTagToggle(tag.id)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="ml-2 flex items-center">
-                      <div 
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      <span className="text-sm">{tag.name}</span>
+              
+              {/* Mobile/Touch devices: Use select interface */}
+              {(isMobile || isTouchDevice) ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Available Tags</label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const tag = tags.find(t => t.id === e.target.value);
+                          if (tag) {
+                            handleTagSelect(tag);
+                            e.target.value = ''; // Reset selection
+                          }
+                        }
+                      }}
+                      value=""
+                    >
+                      <option value="">Select a tag to add...</option>
+                      {getAvailableTags().map(tag => (
+                        <option key={tag.id} value={tag.id}>
+                          {tag.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {selectedTags.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Selected Tags</label>
+                      <div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-md bg-gray-50 min-h-[160px]">
+                        {getSortedSelectedTags().map(tag => (
+                          <SelectedTag
+                            key={tag.id}
+                            tag={tag}
+                            onRemove={handleTagRemove}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </label>
-                ))}
-              </div>
+                  )}
+                </div>
+              ) : (
+                /* Desktop: Use drag and drop interface */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Available Tags */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Available Tags</label>
+                    <div className="min-h-[200px] p-3 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex flex-wrap gap-2">
+                        {getAvailableTags().map(tag => (
+                          <DraggableTag
+                            key={tag.id}
+                            tag={tag}
+                            onSelect={handleTagSelect}
+                          />
+                        ))}
+                        {getAvailableTags().length === 0 && (
+                          <p className="text-gray-500 text-sm">
+                            {tags.length === 0 ? 'No tags available' : 'All tags are selected'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Selected Tags */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Selected Tags</label>
+                    <DropZone
+                      onDrop={handleTagSelect}
+                      className="min-h-[200px] p-3 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50 transition-colors"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {getSortedSelectedTags().map(tag => (
+                          <SelectedTag
+                            key={tag.id}
+                            tag={tag}
+                            onRemove={handleTagRemove}
+                          />
+                        ))}
+                        {selectedTags.length === 0 && (
+                          <p className="text-gray-500 text-sm">
+                            Drag tags here or click on available tags
+                          </p>
+                        )}
+                      </div>
+                    </DropZone>
+                  </div>
+                </div>
+              )}
+              
+              {selectedTags.length > 0 && (
+                <div className="mt-2 text-xs text-gray-600">
+                  {selectedTags.length} tag{selectedTags.length !== 1 ? 's' : ''} selected
+                </div>
+              )}
             </div>
           )}
 
