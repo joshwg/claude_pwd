@@ -24,7 +24,7 @@ export interface PasswordEntry {
   site: string;
   username: string;
   password: string;
-  notes?: string;
+  hasNotes: boolean; // Changed from notes?: string to indicate if notes exist
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -97,6 +97,25 @@ export interface UpdatePasswordEntryRequest {
 export interface SearchPasswordsParams {
   query?: string;
   tagIds?: string[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginationInfo {
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface PasswordEntriesResponse {
+  entries: PasswordEntry[];
+  pagination: PaginationInfo;
+}
+
+export interface PasswordEntryNotes {
+  id: string;
+  notes: string | null;
 }
 
 export interface ApiError {

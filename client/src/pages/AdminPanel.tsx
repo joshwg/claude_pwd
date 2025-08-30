@@ -4,6 +4,7 @@ import { getUsers, createUser, updateUser, deleteUser, updateUserPassword, valid
 import { Users, Plus, Edit, Trash2, Shield, User, Eye } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useDebounce } from '../hooks/useDebounce';
+import PasswordInput from '../components/PasswordInput';
 
 interface UserFormData {
   name: string;
@@ -17,6 +18,10 @@ interface ValidationState {
     isValid: boolean;
     message: string;
   };
+  password: {
+    isValid: boolean;
+    message: string;
+  };
 }
 
 const AdminPanel: React.FC = () => {
@@ -24,6 +29,9 @@ const AdminPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetUser, setResetUser] = useState<{ id: string; name: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     password: '',
@@ -32,6 +40,10 @@ const AdminPanel: React.FC = () => {
   const [validation, setValidation] = useState<ValidationState>({
     username: {
       isValidating: false,
+      isValid: true,
+      message: ''
+    },
+    password: {
       isValid: true,
       message: ''
     }
@@ -53,6 +65,11 @@ const AdminPanel: React.FC = () => {
       }));
     }
   }, [debouncedUsername, editingUser]);
+
+  useEffect(() => {
+    // Validate password whenever it changes or when switching between create/edit modes
+    validatePassword(formData.password);
+  }, [formData.password, editingUser]);
 
   const validateUsernameDebounced = async (username: string) => {
     setValidation(prev => ({
@@ -80,6 +97,38 @@ const AdminPanel: React.FC = () => {
         }
       }));
     }
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password && !editingUser) {
+      setValidation(prev => ({
+        ...prev,
+        password: {
+          isValid: false,
+          message: 'Password is required'
+        }
+      }));
+      return;
+    }
+
+    if (password && password.length < 6) {
+      setValidation(prev => ({
+        ...prev,
+        password: {
+          isValid: false,
+          message: 'Password must be at least 6 characters long'
+        }
+      }));
+      return;
+    }
+
+    setValidation(prev => ({
+      ...prev,
+      password: {
+        isValid: true,
+        message: password ? 'Password is valid' : ''
+      }
+    }));
   };
 
   const loadUsers = async () => {
@@ -133,9 +182,14 @@ const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleResetPassword = async (id: string, name: string) => {
-    const newPassword = prompt(`Enter new password for "${name}":`);
-    if (!newPassword) return;
+  const handleResetPassword = (id: string, name: string) => {
+    setResetUser({ id, name });
+    setNewPassword('');
+    setShowPasswordReset(true);
+  };
+
+  const submitPasswordReset = async () => {
+    if (!resetUser || !newPassword) return;
 
     if (newPassword.length < 6) {
       toast.error('Password must be at least 6 characters long');
@@ -143,18 +197,38 @@ const AdminPanel: React.FC = () => {
     }
 
     try {
-      await updateUserPassword(id, { newPassword });
+      await updateUserPassword(resetUser.id, { newPassword });
       toast.success('Password updated successfully');
+      setShowPasswordReset(false);
+      setResetUser(null);
+      setNewPassword('');
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Failed to update password';
       toast.error(errorMessage);
     }
   };
 
+  const cancelPasswordReset = () => {
+    setShowPasswordReset(false);
+    setResetUser(null);
+    setNewPassword('');
+  };
+
   const resetForm = () => {
     setFormData({ name: '', password: '', isAdmin: false });
     setEditingUser(null);
     setShowForm(false);
+    setValidation({
+      username: {
+        isValidating: false,
+        isValid: true,
+        message: ''
+      },
+      password: {
+        isValid: true,
+        message: ''
+      }
+    });
   };
 
   const startEdit = (user: UserType) => {
@@ -228,7 +302,7 @@ const AdminPanel: React.FC = () => {
                         ? 'border-green-300 bg-green-50'
                         : 'border-gray-300'
                     }`}
-                    placeholder="User's full name"
+                    placeholder="Username"
                   />
                   {validation.username.isValidating && (
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -250,16 +324,36 @@ const AdminPanel: React.FC = () => {
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     Password *
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     id="password"
                     required={!editingUser}
                     value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="User's password"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData(prev => ({ ...prev, password: value }));
+                      validatePassword(value);
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      !validation.password.isValid && formData.password
+                        ? 'border-red-300 bg-red-50'
+                        : validation.password.isValid && formData.password && validation.password.message
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-gray-300'
+                    }`}
+                    placeholder="Password"
                     minLength={6}
+                    autoComplete="new-password"
                   />
+                  {!validation.password.isValid && formData.password && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {validation.password.message}
+                    </p>
+                  )}
+                  {validation.password.isValid && formData.password && validation.password.message && (
+                    <p className="mt-1 text-sm text-green-600">
+                      {validation.password.message}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -272,7 +366,7 @@ const AdminPanel: React.FC = () => {
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <label htmlFor="isAdmin" className="ml-2 text-sm text-gray-700">
-                  Administrator privileges
+                  Is Administrator
                 </label>
               </div>
 
@@ -286,13 +380,75 @@ const AdminPanel: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={!validation.username.isValid || validation.username.isValidating}
+                  disabled={
+                    !validation.username.isValid || 
+                    validation.username.isValidating ||
+                    (!editingUser && !validation.password.isValid)
+                  }
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingUser ? 'Update User' : 'Create User'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Modal */}
+      {showPasswordReset && resetUser && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Reset Password for "{resetUser.name}"
+              </h3>
+              <button
+                onClick={cancelPasswordReset}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password *
+                </label>
+                <PasswordInput
+                  id="newPassword"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter new password (minimum 6 characters)"
+                  required
+                />
+                {newPassword && newPassword.length < 6 && (
+                  <p className="mt-1 text-sm text-red-600">
+                    Password must be at least 6 characters long
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={cancelPasswordReset}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submitPasswordReset}
+                  disabled={!newPassword || newPassword.length < 6}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reset Password
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -5,6 +5,8 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
 import Profile from './pages/Profile';
+import Tags from './pages/Tags';
+import PasswordEdit from './pages/PasswordEdit';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 
@@ -44,6 +46,36 @@ function App() {
                 <AdminPanel />
               </Layout>
             </AdminRoute>
+          } 
+        />
+        <Route 
+          path="/tags" 
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Tags />
+              </Layout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/password/new" 
+          element={
+            <PrivateRoute>
+              <Layout>
+                <PasswordEdit />
+              </Layout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/password/edit" 
+          element={
+            <PrivateRoute>
+              <Layout>
+                <PasswordEdit />
+              </Layout>
+            </PrivateRoute>
           } 
         />
         <Route 

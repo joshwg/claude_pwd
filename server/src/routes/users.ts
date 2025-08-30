@@ -147,9 +147,17 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) 
   try {
     const { id } = req.params;
 
-    // Check if user exists
+    // Check if user exists and get related data counts for logging
     const existingUser = await prisma.user.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            tags: true,
+            passwordEntries: true
+          }
+        }
+      }
     });
 
     if (!existingUser) {
@@ -161,12 +169,27 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) 
       return res.status(403).json({ error: 'Cannot delete your own account' });
     }
 
-    // Delete user (cascade will handle related data)
+    // Log what will be cascade deleted
+    console.log(`Deleting user "${existingUser.name}" with ${existingUser._count.tags} tags and ${existingUser._count.passwordEntries} password entries`);
+
+    // Delete user (cascade will automatically handle related data)
+    // This will cascade delete:
+    // - All tags belonging to this user
+    // - All password entries belonging to this user  
+    // - All password entry tags associated with the user's tags and password entries
     await prisma.user.delete({
       where: { id }
     });
 
-    res.json({ message: 'User deleted successfully' });
+    console.log(`Successfully deleted user "${existingUser.name}" and all related data`);
+    res.json({ 
+      message: 'User deleted successfully',
+      deletedData: {
+        user: existingUser.name,
+        tags: existingUser._count.tags,
+        passwordEntries: existingUser._count.passwordEntries
+      }
+    });
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ error: 'Internal server error' });

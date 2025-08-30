@@ -46,11 +46,70 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
     isValidating: false
   });
 
+  const [descriptionValidation, setDescriptionValidation] = useState<{ isValid: boolean; message: string }>({
+    isValid: true,
+    message: ''
+  });
+
+  const [colorValidation, setColorValidation] = useState<{ isValid: boolean; message: string }>({
+    isValid: true,
+    message: ''
+  });
+
   const debouncedName = useDebounce(formData.name, 500);
+
+  // Validation functions
+  const validateName = (name: string) => {
+    if (!name.trim()) {
+      return { isValid: false, message: 'Name is required' };
+    }
+    if (name.length > 40) {
+      return { isValid: false, message: 'Name must be 40 characters or less' };
+    }
+    return { isValid: true, message: '' };
+  };
+
+  const validateDescription = (description: string) => {
+    if (description.length > 255) {
+      return { isValid: false, message: 'Description must be 255 characters or less' };
+    }
+    return { isValid: true, message: '' };
+  };
+
+  const validateColor = (color: string) => {
+    const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+    if (!hexColorRegex.test(color)) {
+      return { isValid: false, message: 'Color must be a valid hex color' };
+    }
+    return { isValid: true, message: '' };
+  };
+
+  // Real-time validation for description
+  useEffect(() => {
+    const result = validateDescription(formData.description);
+    setDescriptionValidation(result);
+  }, [formData.description]);
+
+  // Real-time validation for color
+  useEffect(() => {
+    const result = validateColor(formData.color);
+    setColorValidation(result);
+  }, [formData.color]);
 
   // Validate name when debounced name changes
   useEffect(() => {
-    const validateName = async () => {
+    const validateNameAsync = async () => {
+      // First check local validation
+      const localValidation = validateName(debouncedName);
+      if (!localValidation.isValid) {
+        setNameValidation({ 
+          isValid: false, 
+          message: localValidation.message, 
+          isValidating: false 
+        });
+        return;
+      }
+
       if (!debouncedName.trim()) {
         setNameValidation({ isValid: true, message: '', isValidating: false });
         return;
@@ -75,7 +134,7 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
     };
 
     if (debouncedName !== formData.name) return; // Only validate if debounced value matches current
-    validateName();
+    validateNameAsync();
   }, [debouncedName, tag?.id, formData.name]);
 
   useEffect(() => {
@@ -90,9 +149,25 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nameValidation.isValid) return;
+    
+    // Check all validations before submitting
+    if (!nameValidation.isValid || 
+        !descriptionValidation.isValid || 
+        !colorValidation.isValid || 
+        nameValidation.isValidating ||
+        !formData.name.trim()) {
+      return;
+    }
+    
     onSubmit(formData);
   };
+
+  // Calculate if form is valid for submit button
+  const isFormValid = nameValidation.isValid && 
+                     descriptionValidation.isValid && 
+                     colorValidation.isValid && 
+                     !nameValidation.isValidating && 
+                     formData.name.trim().length > 0;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -113,6 +188,9 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Tag Name *
+              <span className="text-sm text-gray-500 ml-1">
+                ({formData.name.length}/40)
+              </span>
             </label>
             <div className="relative">
               <input
@@ -120,7 +198,18 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
                 id="name"
                 required
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, name: e.target.value }));
+                  // Immediate local validation for length/required
+                  const localValidation = validateName(e.target.value);
+                  if (!localValidation.isValid) {
+                    setNameValidation(prev => ({ 
+                      ...prev, 
+                      isValid: false, 
+                      message: localValidation.message 
+                    }));
+                  }
+                }}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                   nameValidation.isValidating
                     ? 'border-gray-300'
@@ -131,6 +220,7 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
                     : 'border-gray-300'
                 }`}
                 placeholder="e.g., Work, Personal, Social"
+                maxLength={40}
               />
               {nameValidation.isValidating && (
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -143,20 +233,38 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
                 {nameValidation.message}
               </p>
             )}
+            {!formData.name.trim() && (
+              <p className="mt-1 text-sm text-gray-500">
+                Enter a unique name for your tag (1-40 characters)
+              </p>
+            )}
           </div>
 
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
               Description
+              <span className="text-sm text-gray-500 ml-1">
+                ({formData.description.length}/255)
+              </span>
             </label>
             <textarea
               id="description"
-              rows={3}
+              rows={6}
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Optional description for this tag"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                !descriptionValidation.isValid
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
+              placeholder="Optional description for this tag (max 255 characters)"
+              maxLength={255}
             />
+            {!descriptionValidation.isValid && (
+              <p className="mt-1 text-sm text-red-600">
+                {descriptionValidation.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -215,6 +323,11 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
               />
               <span className="text-sm font-mono">{formData.color}</span>
             </div>
+            {!colorValidation.isValid && (
+              <p className="mt-1 text-sm text-red-600">
+                {colorValidation.message}
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">
@@ -227,7 +340,7 @@ const TagForm: React.FC<TagFormProps> = ({ tag, onSubmit, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={!nameValidation.isValid || nameValidation.isValidating || !formData.name.trim()}
+              disabled={!isFormValid}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {tag ? 'Update' : 'Create'} Tag

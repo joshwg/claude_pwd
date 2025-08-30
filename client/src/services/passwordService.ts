@@ -3,7 +3,9 @@ import {
   PasswordEntry, 
   CreatePasswordEntryRequest, 
   UpdatePasswordEntryRequest, 
-  SearchPasswordsParams 
+  SearchPasswordsParams,
+  PasswordEntriesResponse,
+  PasswordEntryNotes
 } from '../types';
 
 const API_BASE_URL = '/api';
@@ -22,13 +24,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const getPasswordEntries = async (params?: SearchPasswordsParams): Promise<PasswordEntry[]> => {
+export const getPasswordEntries = async (params?: SearchPasswordsParams): Promise<PasswordEntriesResponse> => {
   const response = await api.get('/passwords', { params });
   return response.data;
 };
 
 export const getPasswordEntry = async (id: string): Promise<PasswordEntry> => {
   const response = await api.get(`/passwords/${id}`);
+  return response.data;
+};
+
+export const getPasswordEntryNotes = async (id: string): Promise<PasswordEntryNotes> => {
+  const response = await api.get(`/passwords/${id}/notes`);
   return response.data;
 };
 

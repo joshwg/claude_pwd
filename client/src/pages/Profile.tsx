@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateUser, updateMyPassword } from '../services/userService';
 import { User, Shield, Lock, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import PasswordInput from '../components/PasswordInput';
 
 const Profile: React.FC = () => {
   const { user } = useAuth();
@@ -190,8 +191,7 @@ const Profile: React.FC = () => {
               <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-2">
                 Current Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 id="currentPassword"
                 required
                 value={passwordData.currentPassword}
@@ -205,8 +205,7 @@ const Profile: React.FC = () => {
               <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
                 New Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 id="newPassword"
                 required
                 value={passwordData.newPassword}
@@ -221,8 +220,7 @@ const Profile: React.FC = () => {
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                 Confirm New Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 id="confirmPassword"
                 required
                 value={passwordData.confirmPassword}

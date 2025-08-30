@@ -3,6 +3,7 @@ import { Tag } from '../types';
 import { X } from 'lucide-react';
 import { validatePasswordEntry } from '../services/passwordService';
 import { useDebounce } from '../hooks/useDebounce';
+import PasswordInput from './PasswordInput';
 
 interface PasswordFormProps {
   password?: any;
@@ -98,7 +99,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">
             {password ? 'Edit Password' : 'Add New Password'}
@@ -175,14 +176,14 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
               Password <span className="text-xs text-gray-500">(optional)</span>
             </label>
             <div className="flex space-x-2">
-              <input
-                type="text"
+              <PasswordInput
                 id="password"
-                maxLength={128}
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                 placeholder="Enter password (optional)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                maxLength={128}
+                autoComplete="new-password"
               />
               <button
                 type="button"
@@ -206,7 +207,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, tags, onSubmit, o
             </label>
             <textarea
               id="notes"
-              rows={3}
+              rows={6}
               maxLength={4096}
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}

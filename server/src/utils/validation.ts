@@ -61,4 +61,6 @@ export const updatePasswordEntrySchema = z.object({
 export const searchPasswordsSchema = z.object({
   query: z.string().optional(),
   tagIds: z.array(z.string()).optional(),
+  limit: z.number().min(1).max(100).default(100).optional(),
+  offset: z.number().min(0).default(0).optional(),
 });

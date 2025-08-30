@@ -14,28 +14,46 @@ const router = express.Router();
 router.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user!.id;
-    const { query, tagIds } = req.query;
+    
+    // Parse and validate query parameters
+    const validation = searchPasswordsSchema.safeParse({
+      query: req.query.query,
+      tagIds: req.query.tagIds ? (Array.isArray(req.query.tagIds) ? req.query.tagIds : [req.query.tagIds]) : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : 100,
+      offset: req.query.offset ? parseInt(req.query.offset as string) : 0,
+    });
+
+    if (!validation.success) {
+      return res.status(400).json({ error: 'Invalid search parameters', details: validation.error });
+    }
+
+    const { query, tagIds, limit, offset } = validation.data;
 
     let whereClause: any = { userId };
 
-    // Text search in site or username
-    if (query && typeof query === 'string') {
+    // Text search in site, username, or notes (encrypted notes will be searched after decryption)
+    if (query && query.trim()) {
       whereClause.OR = [
-        { site: { contains: query, mode: 'insensitive' } },
-        { username: { contains: query, mode: 'insensitive' } }
+        { site: { contains: query.trim(), mode: 'insensitive' } },
+        { username: { contains: query.trim(), mode: 'insensitive' } }
       ];
     }
 
     // Tag filter
-    if (tagIds) {
-      const tagIdArray = Array.isArray(tagIds) ? tagIds : [tagIds];
+    if (tagIds && tagIds.length > 0) {
       whereClause.tags = {
         some: {
-          tagId: { in: tagIdArray }
+          tagId: { in: tagIds }
         }
       };
     }
 
+    // First get the total count for pagination info
+    const totalCount = await prisma.passwordEntry.count({
+      where: whereClause
+    });
+
+    // Fetch limited password entries with pagination
     const passwordEntries = await prisma.passwordEntry.findMany({
       where: whereClause,
       include: {
@@ -48,21 +66,84 @@ router.get('/', authenticate, async (req: AuthRequest, res: any) => {
       orderBy: [
         { site: 'asc' },
         { username: 'asc' }
-      ]
+      ],
+      take: limit,
+      skip: offset
     });
 
     // Transform to include decrypted data and tag information directly
-    const formattedEntries = passwordEntries.map(entry => ({
-      ...entry,
-      password: entry.password ? decrypt(entry.password, entry.salt) : null,
-      notes: entry.notes ? decrypt(entry.notes, entry.salt) : null,
-      tags: entry.tags.map((t: any) => t.tag),
-      salt: undefined // Remove salt from response for security
-    }));
+    // Only decrypt passwords (not notes) and never send salt to client
+    const formattedEntries = passwordEntries.map(entry => {
+      const entryWithSalt = entry as any; // Type assertion to access salt field
+      const decryptedEntry = {
+        id: entry.id,
+        site: entry.site,
+        username: entry.username,
+        password: entry.password ? decrypt(entry.password, entryWithSalt.salt) : null,
+        hasNotes: Boolean(entry.notes), // Just indicate if notes exist, don't send them
+        userId: entry.userId,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        tags: entry.tags.map((t: any) => t.tag)
+        // Explicitly exclude: notes, salt
+      };
 
-    res.json(formattedEntries);
+      // If there's a text query, check if this entry matches
+      // We need to decrypt notes temporarily just for filtering, not for response
+      if (query && query.trim() && entry.notes) {
+        const queryLower = query.trim().toLowerCase();
+        const decryptedNotes = decrypt(entry.notes, entryWithSalt.salt);
+        const matchesNotes = decryptedNotes.toLowerCase().includes(queryLower);
+        const matchesSite = entry.site.toLowerCase().includes(queryLower);
+        const matchesUsername = entry.username.toLowerCase().includes(queryLower);
+        
+        // Only return if it matches the search criteria
+        if (!matchesSite && !matchesUsername && !matchesNotes) {
+          return null;
+        }
+      }
+
+      return decryptedEntry;
+    }).filter(entry => entry !== null); // Remove null entries
+
+    res.json({
+      entries: formattedEntries,
+      pagination: {
+        total: totalCount,
+        limit: limit || 100,
+        offset: offset || 0,
+        hasMore: (offset || 0) + (limit || 100) < totalCount
+      }
+    });
   } catch (error) {
     console.error('Error fetching password entries:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get notes for a specific password entry (separate endpoint for security)
+router.get('/:id/notes', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const passwordEntry = await prisma.passwordEntry.findFirst({
+      where: { id, userId }
+    });
+
+    if (!passwordEntry) {
+      return res.status(404).json({ error: 'Password entry not found' });
+    }
+
+    // Decrypt and return only the notes
+    const decryptedNotes = passwordEntry.notes ? decrypt(passwordEntry.notes, (passwordEntry as any).salt) : null;
+    
+    res.json({ 
+      id: passwordEntry.id,
+      notes: decryptedNotes 
+    });
+  } catch (error) {
+    console.error('Error fetching password entry notes:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -88,13 +169,18 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: any) => {
       return res.status(404).json({ error: 'Password entry not found' });
     }
 
-    // Transform to include decrypted data and tag information directly
+    // Transform to exclude salt and notes for security
     const formattedEntry = {
-      ...passwordEntry,
-      password: passwordEntry.password ? decrypt(passwordEntry.password, passwordEntry.salt) : null,
-      notes: passwordEntry.notes ? decrypt(passwordEntry.notes, passwordEntry.salt) : null,
-      tags: passwordEntry.tags.map((t: any) => t.tag),
-      salt: undefined // Remove salt from response for security
+      id: passwordEntry.id,
+      site: passwordEntry.site,
+      username: passwordEntry.username,
+      password: passwordEntry.password ? decrypt(passwordEntry.password, (passwordEntry as any).salt) : null,
+      hasNotes: Boolean(passwordEntry.notes), // Just indicate if notes exist
+      userId: passwordEntry.userId,
+      createdAt: passwordEntry.createdAt,
+      updatedAt: passwordEntry.updatedAt,
+      tags: passwordEntry.tags.map((t: any) => t.tag)
+      // Explicitly exclude: notes, salt
     };
 
     res.json(formattedEntry);
@@ -154,18 +240,22 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
     const encryptedNotes = notes ? encrypt(notes, salt) : null;
 
     // Create password entry
+    const createData: any = {
+      site,
+      username,
+      salt,
+      userId,
+      tags: {
+        create: tagIds?.map(tagId => ({ tagId })) || []
+      }
+    };
+
+    // Only add password and notes if they exist
+    if (encryptedPassword) createData.password = encryptedPassword;
+    if (encryptedNotes) createData.notes = encryptedNotes;
+
     const passwordEntry = await prisma.passwordEntry.create({
-      data: {
-        site,
-        username,
-        password: encryptedPassword,
-        notes: encryptedNotes,
-        salt,
-        userId,
-        tags: {
-          create: tagIds?.map(tagId => ({ tagId })) || []
-        }
-      },
+      data: createData,
       include: {
         tags: {
           include: {
@@ -175,13 +265,18 @@ router.post('/', authenticate, async (req: AuthRequest, res: any) => {
       }
     });
 
-    // Decrypt for response
+    // Format response excluding salt and notes for security
     const decryptedEntry = {
-      ...passwordEntry,
-      password: passwordEntry.password ? decrypt(passwordEntry.password, passwordEntry.salt) : null,
-      notes: passwordEntry.notes ? decrypt(passwordEntry.notes, passwordEntry.salt) : null,
-      tags: passwordEntry.tags.map((t: any) => t.tag),
-      salt: undefined // Remove salt from response for security
+      id: passwordEntry.id,
+      site: passwordEntry.site,
+      username: passwordEntry.username,
+      password: passwordEntry.password ? decrypt(passwordEntry.password, (passwordEntry as any).salt) : null,
+      hasNotes: Boolean(passwordEntry.notes), // Just indicate if notes exist
+      userId: passwordEntry.userId,
+      createdAt: passwordEntry.createdAt,
+      updatedAt: passwordEntry.updatedAt,
+      tags: passwordEntry.tags.map((t: any) => t.tag)
+      // Explicitly exclude: notes, salt
     };
 
     const response: any = { passwordEntry: decryptedEntry };
@@ -267,12 +362,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
     
     // Handle password encryption
     if (password !== undefined) {
-      updateData.password = password ? encrypt(password, existingEntry.salt) : null;
+      updateData.password = password ? encrypt(password, (existingEntry as any).salt) : null;
     }
     
     // Handle notes encryption  
     if (notes !== undefined) {
-      updateData.notes = notes ? encrypt(notes, existingEntry.salt) : null;
+      updateData.notes = notes ? encrypt(notes, (existingEntry as any).salt) : null;
     }
 
     // Update password entry
@@ -296,13 +391,18 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
       }
     });
 
-    // Decrypt for response
+    // Format response excluding salt and notes for security
     const decryptedEntry = {
-      ...updatedEntry,
-      password: updatedEntry.password ? decrypt(updatedEntry.password, updatedEntry.salt) : null,
-      notes: updatedEntry.notes ? decrypt(updatedEntry.notes, updatedEntry.salt) : null,
-      tags: updatedEntry.tags.map((t: any) => t.tag),
-      salt: undefined // Remove salt from response for security
+      id: updatedEntry.id,
+      site: updatedEntry.site,
+      username: updatedEntry.username,
+      password: updatedEntry.password ? decrypt(updatedEntry.password, (updatedEntry as any).salt) : null,
+      hasNotes: Boolean(updatedEntry.notes), // Just indicate if notes exist
+      userId: updatedEntry.userId,
+      createdAt: updatedEntry.createdAt,
+      updatedAt: updatedEntry.updatedAt,
+      tags: updatedEntry.tags.map((t: any) => t.tag)
+      // Explicitly exclude: notes, salt
     };
 
     const response: any = { passwordEntry: decryptedEntry };
